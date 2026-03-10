@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.j
 import { Input } from "@/components/ui/input.jsx"
 import { Button } from "@/components/ui/button.jsx"
 import { useAuth } from "@/lib/AuthContext.jsx"
+import { Link } from "react-router-dom"
 
 export default function Login() {
   const { login, user, loading } = useAuth()
@@ -56,6 +57,11 @@ export default function Login() {
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting ? "Ingresando..." : "Ingresar"}
             </Button>
+            <div className="text-center">
+              <Link to="/forgot-password" className="text-sm text-slate-500 hover:text-slate-700">
+                Recuperar contraseña
+              </Link>
+            </div>
           </form>
         </CardContent>
       </Card>

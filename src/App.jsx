@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { pagesConfig } from "@/pages.config.js"
 import PageNotFound from "@/lib/PageNotFound.jsx"
 import Login from "@/pages/Login.jsx"
+import ResetPassword from "@/pages/ResetPassword.jsx"
+import ForgotPassword from "@/pages/ForgotPassword.jsx"
 
 const queryClient = new QueryClient()
 const { Pages, mainPage: mainPageKey, layout: LayoutComponent = Layout } = pagesConfig
@@ -69,6 +71,11 @@ function AppRoutes() {
         path="/login"
         element={user ? <Navigate to="/" replace /> : <Login />}
       />
+      <Route
+        path="/forgot-password"
+        element={user ? <Navigate to="/" replace /> : <ForgotPassword />}
+      />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/*" element={<ProtectedApp />} />
     </Routes>
   )
