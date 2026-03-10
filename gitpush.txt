@@ -1,5 +1,5 @@
 git add .
-git commit -m "mejora comportamiento de stock y ventas al descontar"
+git commit -m "vista detallada de cliente"
 git push
 
 route: /Applications/XAMPP/xamppfiles/htdocs/AgroApp
