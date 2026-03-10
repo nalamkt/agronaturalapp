@@ -182,9 +182,8 @@ export default function NewSale() {
           subtotal: Number(item.subtotal) || 0,
         })),
         total,
-        credit_applied: creditToApply,
-        status: autoStatus,
-        notes: notesWithCredit,
+        status,
+        notes,
         sale_date: new Date().toISOString().split("T")[0],
       })
 

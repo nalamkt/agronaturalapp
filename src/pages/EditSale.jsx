@@ -1,140 +1,151 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
-import { ArrowLeft, Plus, Save } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
+import React, { useState, useEffect, useMemo } from "react"
+import { base44 } from "@/api/base44Client"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { Link, useNavigate } from "react-router-dom"
+import { createPageUrl } from "@/utils"
+import { ArrowLeft, Plus, Save } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import SaleItemRow from "@/components/sales/SaleItemRow";
-import { toast } from "sonner";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import SaleItemRow from "@/components/sales/SaleItemRow"
+import { toast } from "sonner"
 
-const emptyItem = { product_id: "", product_name: "", quantity: 1, unit_price: 0, subtotal: 0 };
+const emptyItem = {
+  product_id: "",
+  product_name: "",
+  quantity: 1,
+  unit_price: 0,
+  subtotal: 0,
+}
 
 export default function EditSale() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const saleId = urlParams.get("id");
+  const urlParams = new URLSearchParams(window.location.search)
+  const saleId = urlParams.get("id")
 
-  const [clientId, setClientId] = useState("");
-  const [items, setItems] = useState([{ ...emptyItem }]);
-  const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState("pendiente");
-  const [originalSale, setOriginalSale] = useState(null);
-  const [initialized, setInitialized] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [clientId, setClientId] = useState("")
+  const [items, setItems] = useState([{ ...emptyItem }])
+  const [notes, setNotes] = useState("")
+  const [status, setStatus] = useState("pendiente")
+  const [saleDate, setSaleDate] = useState("")
+  const [originalSale, setOriginalSale] = useState(null)
+  const [initialized, setInitialized] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
     queryFn: () => base44.entities.Client.list(),
-  });
+  })
 
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: () => base44.entities.Product.list(),
-  });
+  })
 
   const { data: saleData, isLoading: loadingSale } = useQuery({
     queryKey: ["sale", saleId],
-    queryFn: () => base44.entities.Sale.list().then((list) => list.find((s) => s.id === saleId)),
+    queryFn: () => base44.entities.Sale.get(saleId),
     enabled: !!saleId,
-  });
+  })
 
   useEffect(() => {
     if (saleData && !initialized) {
-      setClientId(saleData.client_id || "");
-      setItems(saleData.items?.length ? saleData.items : [{ ...emptyItem }]);
-      setNotes(saleData.notes || "");
-      setStatus(saleData.status || "pendiente");
-      setOriginalSale(saleData);
-      setInitialized(true);
+      setClientId(saleData.client_id || "")
+      setItems(saleData.items?.length ? saleData.items : [{ ...emptyItem }])
+      setNotes(saleData.notes || "")
+      setStatus(saleData.status || "pendiente")
+      setSaleDate(saleData.sale_date || "")
+      setOriginalSale(saleData)
+      setInitialized(true)
     }
-  }, [saleData, initialized]);
+  }, [saleData, initialized])
 
-  // Effective products: add back original quantities so the stock selector is correct
   const effectiveProducts = useMemo(() => {
-    if (!originalSale) return products;
-    const bonus = {};
+    if (!originalSale) return products
+
+    const bonus = {}
     for (const item of originalSale.items || []) {
-      bonus[item.product_id] = (bonus[item.product_id] || 0) + item.quantity;
+      bonus[item.product_id] = (bonus[item.product_id] || 0) + (Number(item.quantity) || 0)
     }
-    return products.map((p) => ({ ...p, stock: p.stock + (bonus[p.id] || 0) }));
-  }, [products, originalSale]);
+
+    return products.map((p) => ({
+      ...p,
+      stock: (Number(p.stock) || 0) + (bonus[p.id] || 0),
+    }))
+  }, [products, originalSale])
 
   const handleItemChange = (index, updatedItem) => {
-    const newItems = [...items];
-    newItems[index] = updatedItem;
-    setItems(newItems);
-  };
+    const newItems = [...items]
+    newItems[index] = updatedItem
+    setItems(newItems)
+  }
 
   const handleRemoveItem = (index) => {
-    if (items.length === 1) return;
-    setItems(items.filter((_, i) => i !== index));
-  };
+    if (items.length === 1) return
+    setItems(items.filter((_, i) => i !== index))
+  }
 
-  const total = items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+  const total = items.reduce((sum, item) => sum + (Number(item.subtotal) || 0), 0)
 
   const handleSubmit = async () => {
-  if (!clientId) {
-    toast.error("Seleccioná un cliente")
-    return
-  }
-
-  const validItems = items.filter((i) => i.product_id)
-  if (validItems.length === 0) {
-    toast.error("Agregá al menos un producto")
-    return
-  }
-
-  try {
-    setSaving(true)
-    const client = clients.find((c) => c.id === clientId)
-
-    const stockChanges = {}
-    for (const item of originalSale?.items || []) {
-      stockChanges[item.product_id] = (stockChanges[item.product_id] || 0) + item.quantity
-    }
-    for (const item of validItems) {
-      stockChanges[item.product_id] = (stockChanges[item.product_id] || 0) - item.quantity
+    if (!clientId) {
+      toast.error("Seleccioná un cliente")
+      return
     }
 
-    for (const [productId, change] of Object.entries(stockChanges)) {
-      const realStock = products.find((p) => p.id === productId)?.stock ?? 0
-      await base44.entities.Product.update(productId, {
-        stock: Math.max(0, realStock + change),
+    const validItems = items.filter((i) => i.product_id)
+    if (validItems.length === 0) {
+      toast.error("Agregá al menos un producto")
+      return
+    }
+
+    try {
+      setSaving(true)
+
+      const client = clients.find((c) => c.id === clientId)
+
+      await base44.entities.Sale.update(saleId, {
+        client_id: clientId,
+        client_name: client?.name || "",
+        items: validItems.map((item) => ({
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity: Number(item.quantity) || 0,
+          unit_price: Number(item.unit_price) || 0,
+          subtotal: Number(item.subtotal) || 0,
+        })),
+        total,
+        status,
+        notes,
+        sale_date: saleDate || originalSale?.sale_date || new Date().toISOString().split("T")[0],
       })
+
+      queryClient.invalidateQueries({ queryKey: ["sales"] })
+      queryClient.invalidateQueries({ queryKey: ["products"] })
+      queryClient.invalidateQueries({ queryKey: ["clients"] })
+      queryClient.invalidateQueries({ queryKey: ["cash_movements"] })
+      queryClient.invalidateQueries({ queryKey: ["sale", saleId] })
+
+      toast.success("Venta actualizada")
+      navigate("/sales")
+    } catch (error) {
+      console.error(error)
+      toast.error(error?.message || "No se pudo actualizar la venta")
+    } finally {
+      setSaving(false)
     }
-
-    await base44.entities.Sale.update(saleId, {
-      client_id: clientId,
-      client_name: client?.name || "",
-      items: validItems,
-      total,
-      status,
-      notes,
-    })
-
-    queryClient.invalidateQueries({ queryKey: ["sales"] })
-    queryClient.invalidateQueries({ queryKey: ["products"] })
-    queryClient.invalidateQueries({ queryKey: ["sale", saleId] })
-
-    toast.success("Venta actualizada")
-    navigate("/sales")
-  } catch (error) {
-    console.error(error)
-    toast.error("No se pudo actualizar la venta")
-  } finally {
-    setSaving(false)
   }
-}
 
   if (loadingSale && !initialized) {
     return (
@@ -143,7 +154,7 @@ export default function EditSale() {
         <Skeleton className="h-24 rounded-xl" />
         <Skeleton className="h-64 rounded-xl" />
       </div>
-    );
+    )
   }
 
   return (
@@ -168,7 +179,9 @@ export default function EditSale() {
           </SelectTrigger>
           <SelectContent>
             {clients.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -177,10 +190,16 @@ export default function EditSale() {
       <Card className="p-5 border-slate-200/60 space-y-4">
         <div className="flex items-center justify-between">
           <Label className="text-base font-semibold text-slate-900">Productos</Label>
-          <Button type="button" variant="outline" size="sm" onClick={() => setItems([...items, { ...emptyItem }])}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setItems([...items, { ...emptyItem }])}
+          >
             <Plus className="h-3.5 w-3.5 mr-1" /> Agregar producto
           </Button>
         </div>
+
         <div className="space-y-3">
           {items.map((item, index) => (
             <SaleItemRow
@@ -193,6 +212,7 @@ export default function EditSale() {
             />
           ))}
         </div>
+
         <div className="flex justify-end pt-4 border-t border-slate-100">
           <div className="text-right">
             <p className="text-sm text-slate-400">Total de la venta</p>
@@ -208,7 +228,9 @@ export default function EditSale() {
           <div className="space-y-2">
             <Label>Estado de la venta</Label>
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pendiente">Pendiente</SelectItem>
                 <SelectItem value="cobrada">Cobrada</SelectItem>
@@ -216,6 +238,7 @@ export default function EditSale() {
               </SelectContent>
             </Select>
           </div>
+
           <div className="space-y-2">
             <Label>Notas (opcional)</Label>
             <Textarea
@@ -238,5 +261,5 @@ export default function EditSale() {
         </Button>
       </div>
     </div>
-  );
+  )
 }

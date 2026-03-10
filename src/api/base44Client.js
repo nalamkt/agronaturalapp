@@ -72,6 +72,148 @@ const createEntity = (name) => {
   }
 }
 
+const getSaleNetAmount = (sale) =>
+  Math.max((Number(sale.total) || 0) - (Number(sale.credit_applied) || 0), 0)
+
+const shouldSkipStock = (item) =>
+  item?.product_name === "DEUDA INICIAL"
+
+const getClientById = async (clientId) => {
+  const { data, error } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", clientId)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+const restoreClientCredit = async (clientId, amount) => {
+  const restoreAmount = Number(amount) || 0
+  if (restoreAmount <= 0) return
+
+  const client = await getClientById(clientId)
+  const currentCredit = Number(client.credit_balance) || 0
+
+  const { error } = await supabase
+    .from("clients")
+    .update({
+      credit_balance: currentCredit + restoreAmount,
+    })
+    .eq("id", clientId)
+
+  if (error) throw error
+}
+
+const consumeClientCredit = async (clientId, total) => {
+  const client = await getClientById(clientId)
+  const currentCredit = Number(client.credit_balance) || 0
+  const saleTotal = Number(total) || 0
+  const creditApplied = Math.min(currentCredit, saleTotal)
+
+  if (creditApplied > 0) {
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        credit_balance: Math.max(currentCredit - creditApplied, 0),
+      })
+      .eq("id", clientId)
+
+    if (error) throw error
+  }
+
+  return creditApplied
+}
+
+const restoreStockFromItems = async (items = []) => {
+  for (const item of items) {
+    if (shouldSkipStock(item)) continue
+
+    const { data: product, error: productError } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", item.product_id)
+      .single()
+
+    if (productError) throw productError
+
+    const currentStock = Number(product.stock) || 0
+    const quantity = Number(item.quantity) || 0
+
+    const { error: updateError } = await supabase
+      .from("products")
+      .update({
+        stock: currentStock + quantity,
+      })
+      .eq("id", item.product_id)
+
+    if (updateError) throw updateError
+  }
+}
+
+const consumeStockFromItems = async (items = []) => {
+  for (const item of items) {
+    if (shouldSkipStock(item)) continue
+
+    const { data: product, error: productError } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", item.product_id)
+      .single()
+
+    if (productError) throw productError
+
+    const currentStock = Number(product.stock) || 0
+    const quantity = Number(item.quantity) || 0
+
+    if (currentStock < quantity) {
+      throw new Error(`Stock insuficiente para ${product.name}`)
+    }
+
+    const { error: updateError } = await supabase
+      .from("products")
+      .update({
+        stock: currentStock - quantity,
+      })
+      .eq("id", item.product_id)
+
+    if (updateError) throw updateError
+  }
+}
+
+const syncCashMovementForSale = async (sale) => {
+  const netAmount = getSaleNetAmount(sale)
+
+  if (sale.status !== "cobrada" || netAmount <= 0) {
+    const { error } = await supabase
+      .from("cash_movements")
+      .delete()
+      .eq("related_sale_id", sale.id)
+
+    if (error) throw error
+    return
+  }
+
+  const payload = {
+    related_sale_id: sale.id,
+    type: "ingreso",
+    concept: `Venta ${sale.client_name || ""}`.trim(),
+    amount: netAmount,
+    category: "venta_manual",
+    date: sale.sale_date || new Date().toISOString().split("T")[0],
+    notes: `Movimiento generado automáticamente por venta ${sale.id}`,
+  }
+
+  const { error } = await supabase
+    .from("cash_movements")
+    .upsert(payload, {
+      onConflict: "related_sale_id",
+    })
+
+  if (error) throw error
+}
+
 const saleEntity = {
   async list() {
     const { data: sales, error: salesError } = await supabase
@@ -125,11 +267,30 @@ const saleEntity = {
   },
 
   async create(payload) {
-    const { items = [], ...salePayload } = payload
+    const { items = [], credit_applied: _ignoredCreditApplied, ...salePayload } = payload
+
+    await consumeStockFromItems(items)
+
+    const autoCreditApplied = await consumeClientCredit(
+      salePayload.client_id,
+      salePayload.total
+    )
+
+    const finalStatus =
+      getSaleNetAmount({
+        total: salePayload.total,
+        credit_applied: autoCreditApplied,
+      }) <= 0
+        ? "cobrada"
+        : salePayload.status
 
     const { data: sale, error: saleError } = await supabase
       .from("sales")
-      .insert(salePayload)
+      .insert({
+        ...salePayload,
+        credit_applied: autoCreditApplied,
+        status: finalStatus,
+      })
       .select()
       .single()
 
@@ -152,96 +313,90 @@ const saleEntity = {
       if (itemsError) throw itemsError
     }
 
-    return this.get(sale.id)
+    const finalSale = await this.get(sale.id)
+    await syncCashMovementForSale(finalSale)
+
+    return finalSale
   },
 
   async update(id, payload) {
-    const { items, ...salePayload } = payload
+    const previousSale = await this.get(id)
+
+    await restoreStockFromItems(previousSale.items || [])
+    await restoreClientCredit(previousSale.client_id, previousSale.credit_applied || 0)
+
+    const { items = [], credit_applied: _ignoredCreditApplied, ...salePayload } = payload
+
+    await consumeStockFromItems(items)
+
+    const autoCreditApplied = await consumeClientCredit(
+      salePayload.client_id,
+      salePayload.total
+    )
+
+    const finalStatus =
+      getSaleNetAmount({
+        total: salePayload.total,
+        credit_applied: autoCreditApplied,
+      }) <= 0
+        ? "cobrada"
+        : salePayload.status
 
     const { data: sale, error: saleError } = await supabase
       .from("sales")
-      .update(salePayload)
+      .update({
+        ...salePayload,
+        credit_applied: autoCreditApplied,
+        status: finalStatus,
+      })
       .eq("id", id)
       .select()
       .single()
 
     if (saleError) throw saleError
 
-    if (items !== undefined) {
-      const { error: deleteItemsError } = await supabase
+    const { error: deleteItemsError } = await supabase
+      .from("sale_items")
+      .delete()
+      .eq("sale_id", id)
+
+    if (deleteItemsError) throw deleteItemsError
+
+    if (items.length > 0) {
+      const rows = items.map((item) => ({
+        sale_id: id,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        subtotal: item.subtotal,
+      }))
+
+      const { error: insertItemsError } = await supabase
         .from("sale_items")
-        .delete()
-        .eq("sale_id", id)
+        .insert(rows)
 
-      if (deleteItemsError) throw deleteItemsError
-
-      if (items.length > 0) {
-        const rows = items.map((item) => ({
-          sale_id: id,
-          product_id: item.product_id,
-          product_name: item.product_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          subtotal: item.subtotal,
-        }))
-
-        const { error: insertItemsError } = await supabase
-          .from("sale_items")
-          .insert(rows)
-
-        if (insertItemsError) throw insertItemsError
-      }
+      if (insertItemsError) throw insertItemsError
     }
 
-    return this.get(id)
+    const finalSale = await this.get(id)
+    await syncCashMovementForSale(finalSale)
+
+    return finalSale
   },
 
   async delete(id) {
     const sale = await this.get(id)
 
-    for (const item of sale.items || []) {
-      const { data: product, error: productError } = await supabase
-        .from("products")
-        .select("*")
-        .eq("id", item.product_id)
-        .single()
+    await restoreStockFromItems(sale.items || [])
+    await restoreClientCredit(sale.client_id, sale.credit_applied || 0)
 
-      if (productError) throw productError
+    const { error: deleteCashError } = await supabase
+      .from("cash_movements")
+      .delete()
+      .eq("related_sale_id", id)
 
-      const currentStock = Number(product.stock) || 0
-      const quantity = Number(item.quantity) || 0
-
-      const { error: updateStockError } = await supabase
-        .from("products")
-        .update({
-          stock: currentStock + quantity,
-        })
-        .eq("id", item.product_id)
-
-      if (updateStockError) throw updateStockError
-    }
-
-    if ((Number(sale.credit_applied) || 0) > 0) {
-      const { data: client, error: clientError } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("id", sale.client_id)
-        .single()
-
-      if (clientError) throw clientError
-
-      const currentCredit = Number(client.credit_balance) || 0
-      const creditToRestore = Number(sale.credit_applied) || 0
-
-      const { error: updateClientError } = await supabase
-        .from("clients")
-        .update({
-          credit_balance: currentCredit + creditToRestore,
-        })
-        .eq("id", sale.client_id)
-
-      if (updateClientError) throw updateClientError
-    }
+    if (deleteCashError) throw deleteCashError
 
     const { error } = await supabase
       .from("sales")
