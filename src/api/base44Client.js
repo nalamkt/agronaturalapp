@@ -205,13 +205,28 @@ const syncCashMovementForSale = async (sale) => {
     notes: `Movimiento generado automáticamente por venta ${sale.id}`,
   }
 
-  const { error } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("cash_movements")
-    .upsert(payload, {
-      onConflict: "related_sale_id",
-    })
+    .select("id")
+    .eq("related_sale_id", sale.id)
+    .maybeSingle()
 
-  if (error) throw error
+  if (existingError) throw existingError
+
+  if (existing?.id) {
+    const { error: updateError } = await supabase
+      .from("cash_movements")
+      .update(payload)
+      .eq("id", existing.id)
+
+    if (updateError) throw updateError
+  } else {
+    const { error: insertError } = await supabase
+      .from("cash_movements")
+      .insert(payload)
+
+    if (insertError) throw insertError
+  }
 }
 
 const saleEntity = {

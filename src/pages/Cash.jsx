@@ -42,8 +42,8 @@ export default function Cash() {
   const queryClient = useQueryClient();
 
   const { data: movements = [], isLoading } = useQuery({
-    queryKey: ["cashMovements"],
-    queryFn: () => base44.entities.CashMovement.list("-date"),
+    queryKey: ["cash_movements"],
+    queryFn: () => base44.entities.CashMovement.list(),
   });
 
   const { data: sales = [] } = useQuery({
@@ -54,7 +54,7 @@ export default function Cash() {
   const createMutation = useMutation({
     mutationFn: (data) => base44.entities.CashMovement.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cashMovements"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_movements"] });
       setDialogOpen(false);
     },
   });
@@ -62,7 +62,7 @@ export default function Cash() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.CashMovement.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cashMovements"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_movements"] });
       setDialogOpen(false);
       setEditMovement(null);
     },
@@ -71,7 +71,7 @@ export default function Cash() {
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.CashMovement.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cashMovements"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_movements"] });
       setDeleteId(null);
     },
   });
