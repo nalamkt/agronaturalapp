@@ -131,7 +131,7 @@ export default function Products() {
               <TableHeader>
                 <TableRow className="bg-slate-50/50">
                   <TableHead>Producto</TableHead>
-                  <TableHead>SKU</TableHead>
+                  <TableHead>Código</TableHead>
                   <TableHead>Categoría</TableHead>
                   <TableHead className="text-right">Precio</TableHead>
                   <TableHead className="text-right">Stock</TableHead>
@@ -149,7 +149,7 @@ export default function Products() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-slate-500 text-sm">{product.sku || "—"}</TableCell>
+                    <TableCell className="text-slate-500 text-sm">{product.legacy_id || "—"}</TableCell>
                     <TableCell className="text-slate-500 text-sm">{product.category || "—"}</TableCell>
                     <TableCell className="text-right font-medium">
                       ${product.price?.toLocaleString("es-AR", { minimumFractionDigits: 2 })}

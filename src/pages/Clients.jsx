@@ -65,11 +65,11 @@ export default function Clients() {
 
   const handleSave = (data) => {
     if (editClient) {
-      updateMutation.mutate({ id: editClient.id, data });
+      updateMutation.mutate({ id: editClient.id, data })
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(data)
     }
-  };
+  }
 
   const getClientDebt = (clientId) => {
     return sales
@@ -77,11 +77,18 @@ export default function Clients() {
       .reduce((sum, s) => sum + (s.total || 0), 0);
   };
 
-  const filtered = clients.filter((c) =>
-    c.name?.toLowerCase().includes(search.toLowerCase()) ||
-    c.email?.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search)
-  );
+  const filtered = clients.filter((client) => {
+    const q = search.toLowerCase()
+
+    return (
+      client.name?.toLowerCase().includes(q) ||
+      client.fantasy_name?.toLowerCase().includes(q) ||
+      client.legal_name?.toLowerCase().includes(q) ||
+      client.cuit?.toLowerCase().includes(q) ||
+      client.phone?.toLowerCase().includes(q) ||
+      String(client.legacy_code || "").includes(q)
+    )
+  })
 
   return (
     <div className="space-y-6">
@@ -132,57 +139,65 @@ export default function Clients() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50/50">
+                  <TableHead>Código</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>CUIT</TableHead>
+                  <TableHead>Cond. IVA</TableHead>
                   <TableHead>Contacto</TableHead>
-                  <TableHead className="text-right">Deuda</TableHead>
+                  <TableHead>Ubicación</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((client) => {
-                  const debt = getClientDebt(client.id);
+                  const parsedAddress = parseAddress(client.address)
+
                   return (
                     <TableRow key={client.id} className="hover:bg-slate-50/50">
+                      <TableCell className="text-slate-500 text-sm">
+                        {client.legacy_code || "—"}
+                      </TableCell>
+
                       <TableCell>
-                        <p className="font-medium text-slate-900">{client.name}</p>
-                        {client.address && <p className="text-xs text-slate-400">{client.address}</p>}
-                      </TableCell>
-                      <TableCell>
-                        <p className="text-sm text-slate-600">{client.email || "—"}</p>
-                        <p className="text-xs text-slate-400">{client.phone || ""}</p>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className={`font-semibold ${debt > 0 ? "text-red-600" : "text-slate-400"}`}>
-                          ${debt.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Link to={createPageUrl("ClientDetail") + `?id=${client.id}`}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Eye className="h-3.5 w-3.5 text-slate-500" />
-                            </Button>
-                          </Link>
-                          {isAdmin && (
-                            <>
-                              <Button
-                                variant="ghost" size="icon" className="h-8 w-8"
-                                onClick={() => { setEditClient(client); setDialogOpen(true); }}
-                              >
-                                <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                              </Button>
-                              <Button
-                                variant="ghost" size="icon" className="h-8 w-8"
-                                onClick={() => setDeleteId(client.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                              </Button>
-                            </>
-                          )}
+                        <div>
+                          <p className="font-medium text-slate-900">
+                            {client.fantasy_name || client.name}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {client.legal_name || "—"}
+                          </p>
                         </div>
                       </TableCell>
+
+                      <TableCell className="text-slate-500 text-sm">
+                        {client.cuit || "—"}
+                      </TableCell>
+
+                      <TableCell className="text-slate-500 text-sm">
+                        {client.tax_status || "—"}
+                      </TableCell>
+
+                      <TableCell>
+                        <div>
+                          <p className="text-sm text-slate-700">{client.contact_name || "—"}</p>
+                          <p className="text-xs text-slate-400">{client.phone || "—"}</p>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <div>
+                          <p className="text-sm text-slate-700">{parsedAddress.commercial_address}</p>
+                          <p className="text-xs text-slate-400">
+                            {parsedAddress.locality} · {parsedAddress.province}
+                          </p>
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        {/* dejá tus botones de editar/eliminar como están */}
+                      </TableCell>
                     </TableRow>
-                  );
+                  )
                 })}
               </TableBody>
             </Table>
