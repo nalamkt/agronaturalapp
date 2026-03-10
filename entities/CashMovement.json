@@ -1,0 +1,52 @@
+{
+  "name": "CashMovement",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "ingreso",
+        "egreso"
+      ],
+      "description": "Tipo de movimiento"
+    },
+    "concept": {
+      "type": "string",
+      "description": "Concepto del movimiento"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Monto"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "venta_manual",
+        "otro_ingreso",
+        "alquiler",
+        "servicios",
+        "personal",
+        "proveedor",
+        "impuestos",
+        "mantenimiento",
+        "otro_egreso"
+      ],
+      "description": "Categor\u00eda del movimiento"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha del movimiento"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notas adicionales"
+    }
+  },
+  "required": [
+    "type",
+    "concept",
+    "amount",
+    "date"
+  ]
+}

@@ -1,0 +1,53 @@
+Last login: Tue Mar 10 11:38:58 on ttys000
+isidorobarrera@MacBook-Air-de-Isidoro-Barrera ~ % cd /Applications/XAMPP/xamppfiles/htdocs
+isidorobarrera@MacBook-Air-de-Isidoro-Barrera htdocs % cd AgroApp
+isidorobarrera@MacBook-Air-de-Isidoro-Barrera AgroApp % npm uninstall @base44/sdk @base44/vite-plugin
+
+removed 18 packages, and audited 616 packages in 1s
+
+204 packages are looking for funding
+  run `npm fund` for details
+
+2 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+isidorobarrera@MacBook-Air-de-Isidoro-Barrera AgroApp % npm run dev
+
+> base44-app@0.0.0 dev
+> vite
+
+12:00:21 [vite] (client) Re-optimizing dependencies because lockfile has changed
+
+  VITE v6.4.1  ready in 1368 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+12:00:30 [vite] Pre-transform error: Failed to load url /src/main.jsx (resolved id: /src/main.jsx). Does the file exist?
+12:00:30 [vite] Pre-transform error: Failed to load url /src/main.jsx (resolved id: /src/main.jsx). Does the file exist? (x2)
+12:00:30 [vite] Pre-transform error: Failed to load url /src/main.jsx (resolved id: /src/main.jsx). Does the file exist? (x3)
+npm run dev
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
