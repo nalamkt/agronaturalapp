@@ -322,30 +322,40 @@ const saleEntity = {
   async update(id, payload) {
     const previousSale = await this.get(id)
 
+    const mergedItems =
+      payload.items !== undefined ? payload.items : previousSale.items || []
+
+    const mergedSalePayload = {
+      client_id: payload.client_id ?? previousSale.client_id,
+      client_name: payload.client_name ?? previousSale.client_name,
+      total: payload.total ?? previousSale.total,
+      status: payload.status ?? previousSale.status,
+      notes: payload.notes ?? previousSale.notes,
+      sale_date: payload.sale_date ?? previousSale.sale_date,
+    }
+
     await restoreStockFromItems(previousSale.items || [])
     await restoreClientCredit(previousSale.client_id, previousSale.credit_applied || 0)
 
-    const { items = [], credit_applied: _ignoredCreditApplied, ...salePayload } = payload
-
-    await consumeStockFromItems(items)
+    await consumeStockFromItems(mergedItems)
 
     const autoCreditApplied = await consumeClientCredit(
-      salePayload.client_id,
-      salePayload.total
+      mergedSalePayload.client_id,
+      mergedSalePayload.total
     )
 
     const finalStatus =
       getSaleNetAmount({
-        total: salePayload.total,
+        total: mergedSalePayload.total,
         credit_applied: autoCreditApplied,
       }) <= 0
         ? "cobrada"
-        : salePayload.status
+        : mergedSalePayload.status
 
     const { data: sale, error: saleError } = await supabase
       .from("sales")
       .update({
-        ...salePayload,
+        ...mergedSalePayload,
         credit_applied: autoCreditApplied,
         status: finalStatus,
       })
@@ -362,8 +372,8 @@ const saleEntity = {
 
     if (deleteItemsError) throw deleteItemsError
 
-    if (items.length > 0) {
-      const rows = items.map((item) => ({
+    if (mergedItems.length > 0) {
+      const rows = mergedItems.map((item) => ({
         sale_id: id,
         product_id: item.product_id,
         product_name: item.product_name,
