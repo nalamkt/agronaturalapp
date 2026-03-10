@@ -8,45 +8,44 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    checkUser()
+  const loadUser = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
-      checkUser()
-    })
-
-    return () => {
-      listener.subscription.unsubscribe()
-    }
-  }, [])
-
-  const checkUser = async () => {
-    const { data } = await supabase.auth.getUser()
-
-    if (!data?.user) {
+    if (!user) {
       setUser(null)
       setProfile(null)
       setLoading(false)
       return
     }
 
-    setUser(data.user)
+    setUser(user)
 
     const { data: profileData } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", data.user.id)
+      .eq("id", user.id)
       .single()
 
-    setProfile(profileData)
+    setProfile(profileData ?? null)
     setLoading(false)
   }
 
-  const login = async (email, password) => {
-    return supabase.auth.signInWithPassword({
-      email,
-      password
+  useEffect(() => {
+    loadUser()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      loadUser()
     })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const login = async (email, password) => {
+    return await supabase.auth.signInWithPassword({ email, password })
   }
 
   const logout = async () => {
@@ -61,7 +60,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         logout,
-        isAdmin: profile?.role === "admin"
+        isAdmin: profile?.role === "admin",
       }}
     >
       {children}

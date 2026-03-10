@@ -83,27 +83,34 @@ export default function EditSale() {
   const total = items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
 
   const handleSubmit = async () => {
-    if (!clientId) { toast.error("Seleccioná un cliente"); return; }
-    const validItems = items.filter((i) => i.product_id);
-    if (validItems.length === 0) { toast.error("Agregá al menos un producto"); return; }
+  if (!clientId) {
+    toast.error("Seleccioná un cliente")
+    return
+  }
 
-    setSaving(true);
-    const client = clients.find((c) => c.id === clientId);
+  const validItems = items.filter((i) => i.product_id)
+  if (validItems.length === 0) {
+    toast.error("Agregá al menos un producto")
+    return
+  }
 
-    // Calculate net stock changes: original items restore (+), new items deduct (-)
-    const stockChanges = {};
+  try {
+    setSaving(true)
+    const client = clients.find((c) => c.id === clientId)
+
+    const stockChanges = {}
     for (const item of originalSale?.items || []) {
-      stockChanges[item.product_id] = (stockChanges[item.product_id] || 0) + item.quantity;
+      stockChanges[item.product_id] = (stockChanges[item.product_id] || 0) + item.quantity
     }
     for (const item of validItems) {
-      stockChanges[item.product_id] = (stockChanges[item.product_id] || 0) - item.quantity;
+      stockChanges[item.product_id] = (stockChanges[item.product_id] || 0) - item.quantity
     }
 
     for (const [productId, change] of Object.entries(stockChanges)) {
-      const realStock = products.find((p) => p.id === productId)?.stock ?? 0;
+      const realStock = products.find((p) => p.id === productId)?.stock ?? 0
       await base44.entities.Product.update(productId, {
         stock: Math.max(0, realStock + change),
-      });
+      })
     }
 
     await base44.entities.Sale.update(saleId, {
@@ -113,15 +120,21 @@ export default function EditSale() {
       total,
       status,
       notes,
-    });
+    })
 
-    queryClient.invalidateQueries({ queryKey: ["sales"] });
-    queryClient.invalidateQueries({ queryKey: ["products"] });
-    queryClient.invalidateQueries({ queryKey: ["sale", saleId] });
+    queryClient.invalidateQueries({ queryKey: ["sales"] })
+    queryClient.invalidateQueries({ queryKey: ["products"] })
+    queryClient.invalidateQueries({ queryKey: ["sale", saleId] })
 
-    toast.success("Venta actualizada");
-    navigate(createPageUrl("Sales"));
-  };
+    toast.success("Venta actualizada")
+    navigate("/sales")
+  } catch (error) {
+    console.error(error)
+    toast.error("No se pudo actualizar la venta")
+  } finally {
+    setSaving(false)
+  }
+}
 
   if (loadingSale && !initialized) {
     return (

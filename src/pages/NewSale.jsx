@@ -57,21 +57,21 @@ export default function NewSale() {
   const total = items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
 
   const handleSubmit = async () => {
-    if (!clientId) {
-      toast.error("Seleccioná un cliente");
-      return;
-    }
+  if (!clientId) {
+    toast.error("Seleccioná un cliente")
+    return
+  }
 
-    const validItems = items.filter((i) => i.product_id);
-    if (validItems.length === 0) {
-      toast.error("Agregá al menos un producto");
-      return;
-    }
+  const validItems = items.filter((i) => i.product_id)
+  if (validItems.length === 0) {
+    toast.error("Agregá al menos un producto")
+    return
+  }
 
-    setSaving(true);
-    const client = clients.find((c) => c.id === clientId);
+  try {
+    setSaving(true)
+    const client = clients.find((c) => c.id === clientId)
 
-    // Create sale
     await base44.entities.Sale.create({
       client_id: clientId,
       client_name: client?.name || "",
@@ -80,24 +80,29 @@ export default function NewSale() {
       status,
       notes,
       sale_date: new Date().toISOString().split("T")[0],
-    });
+    })
 
-    // Update stock for each product
     for (const item of validItems) {
-      const product = products.find((p) => p.id === item.product_id);
+      const product = products.find((p) => p.id === item.product_id)
       if (product) {
         await base44.entities.Product.update(product.id, {
           stock: Math.max(0, product.stock - item.quantity),
-        });
+        })
       }
     }
 
-    queryClient.invalidateQueries({ queryKey: ["sales"] });
-    queryClient.invalidateQueries({ queryKey: ["products"] });
+    queryClient.invalidateQueries({ queryKey: ["sales"] })
+    queryClient.invalidateQueries({ queryKey: ["products"] })
 
-    toast.success("Venta creada exitosamente");
-    navigate(createPageUrl("Sales"));
-  };
+    toast.success("Venta creada exitosamente")
+    navigate("/newsale" === window.location.pathname ? "/sales" : "/sales")
+  } catch (error) {
+    console.error(error)
+    toast.error("No se pudo crear la venta")
+  } finally {
+    setSaving(false)
+  }
+}
 
   return (
     <div className="space-y-6 max-w-3xl">
