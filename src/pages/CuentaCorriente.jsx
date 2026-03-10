@@ -120,7 +120,7 @@ export default function CuentaCorriente() {
                       </TableCell>
                       <TableCell>
                         <Link
-                          to={createPageUrl("ClientDetail") + `?id=${sale.client_id}`}
+                          to={createPageUrl("ClientDetails") + `?id=${sale.client_id}`}
                           className="font-medium text-slate-900 hover:text-indigo-600 hover:underline"
                         >
                           {sale.client_name}
@@ -171,7 +171,7 @@ export default function CuentaCorriente() {
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <Link
-                        to={createPageUrl("ClientDetail") + `?id=${clientId}`}
+                        to={createPageUrl("ClientDetails") + `?id=${clientId}`}
                         className="font-semibold text-slate-900 hover:text-indigo-600 hover:underline"
                       >
                         {clientName}

@@ -28,6 +28,7 @@ import {
 import ClientFormDialog from "@/components/clients/ClientFormDialog"
 import EmptyState from "@/components/shared/EmptyState"
 
+
 const parseAddress = (address = "") => {
   const parts = String(address).split("|").map((p) => p.trim())
 
@@ -212,9 +213,12 @@ export default function Clients() {
 
                       <TableCell>
                         <div>
-                          <p className="font-medium text-slate-900">
+                          <Link
+                            to={createPageUrl("ClientDetails") + `?id=${client.id}`}
+                            className="font-medium text-slate-900 hover:text-indigo-600 hover:underline"
+                          >
                             {client.fantasy_name || client.name}
-                          </p>
+                          </Link>
                           <p className="text-xs text-slate-400">
                             {client.legal_name || "—"}
                           </p>

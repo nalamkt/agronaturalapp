@@ -86,7 +86,7 @@ export default function SaleDetail() {
           <div>
             <p className="font-semibold text-slate-900">{sale.client_name}</p>
             <Link
-              to={createPageUrl("ClientDetail") + `?id=${sale.client_id}`}
+              to={createPageUrl("ClientDetails") + `?id=${sale.client_id}`}
               className="text-xs text-indigo-600 hover:underline"
             >
               Ver perfil del cliente
