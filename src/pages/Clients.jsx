@@ -90,14 +90,21 @@ export default function Clients() {
     }
   }
 
-  const getClientDebt = (clientId) => {
-    return sales
+  const getClientBalance = (client) => {
+    const debt = sales
       .filter(
         (s) =>
-          s.client_id === clientId &&
+          s.client_id === client.id &&
           (s.status === "pendiente" || s.status === "cuenta_corriente")
       )
-      .reduce((sum, s) => sum + (Number(s.total) || 0), 0)
+      .reduce((sum, s) => {
+        const netDebt = (Number(s.total) || 0) - (Number(s.credit_applied) || 0)
+        return sum + Math.max(netDebt, 0)
+      }, 0)
+
+    const credit = Number(client.credit_balance) || 0
+
+    return credit - debt
   }
 
   const filtered = clients.filter((client) => {
@@ -187,7 +194,7 @@ export default function Clients() {
                   <TableHead>Cond. IVA</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Ubicación</TableHead>
-                  <TableHead className="text-right">Deuda</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -195,7 +202,7 @@ export default function Clients() {
               <TableBody>
                 {filtered.map((client) => {
                   const parsedAddress = parseAddress(client.address)
-                  const debt = getClientDebt(client.id)
+                  const balance = getClientBalance(client)
 
                   return (
                     <TableRow key={client.id} className="hover:bg-slate-50/50">
@@ -247,11 +254,16 @@ export default function Clients() {
                       <TableCell className="text-right">
                         <span
                           className={`font-medium ${
-                            debt > 0 ? "text-amber-600" : "text-slate-400"
+                            balance > 0
+                              ? "text-emerald-600"
+                              : balance < 0
+                              ? "text-red-600"
+                              : "text-slate-400"
                           }`}
                         >
+                          {balance > 0 ? "+" : ""}
                           $
-                          {debt.toLocaleString("es-AR", {
+                          {balance.toLocaleString("es-AR", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
                           })}

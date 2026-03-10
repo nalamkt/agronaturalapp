@@ -60,13 +60,18 @@ export default function NewSale() {
 
   const totalDebt = useMemo(() => {
     return selectedClientDebtSales.reduce((acc, sale) => {
-      return acc + (Number(sale.total) || 0)
+      const netDebt = (Number(sale.total) || 0) - (Number(sale.credit_applied) || 0)
+      return acc + Math.max(netDebt, 0)
     }, 0)
   }, [selectedClientDebtSales])
 
   const total = useMemo(() => {
     return items.reduce((acc, item) => acc + (Number(item.subtotal) || 0), 0)
   }, [items])
+
+  const creditBalance = Number(selectedClient?.credit_balance) || 0
+  const creditToApply = Math.min(creditBalance, total)
+  const remainingAfterCredit = Math.max(total - creditToApply, 0)
 
   const formatCurrency = (value) =>
     new Intl.NumberFormat("es-AR", {
@@ -156,6 +161,16 @@ export default function NewSale() {
     try {
       setSaving(true)
 
+      const autoStatus =
+        remainingAfterCredit <= 0
+          ? "cobrada"
+          : status
+
+      const notesWithCredit =
+        creditToApply > 0
+          ? `${notes ? `${notes} | ` : ""}Saldo a favor aplicado: ${formatCurrency(creditToApply)}`
+          : notes
+
       await base44.entities.Sale.create({
         client_id: clientId,
         client_name: selectedClient?.name || "",
@@ -167,8 +182,9 @@ export default function NewSale() {
           subtotal: Number(item.subtotal) || 0,
         })),
         total,
-        status,
-        notes,
+        credit_applied: creditToApply,
+        status: autoStatus,
+        notes: notesWithCredit,
         sale_date: new Date().toISOString().split("T")[0],
       })
 
@@ -182,8 +198,15 @@ export default function NewSale() {
         }
       }
 
+      if (creditToApply > 0 && selectedClient) {
+        await base44.entities.Client.update(selectedClient.id, {
+          credit_balance: Math.max(0, creditBalance - creditToApply),
+        })
+      }
+
       queryClient.invalidateQueries({ queryKey: ["sales"] })
       queryClient.invalidateQueries({ queryKey: ["products"] })
+      queryClient.invalidateQueries({ queryKey: ["clients"] })
 
       toast.success("Venta creada exitosamente")
       navigate("/sales")
@@ -248,24 +271,28 @@ export default function NewSale() {
                 </div>
 
                 <div className="space-y-2">
-                  {selectedClientDebtSales.map((sale) => (
-                    <div
-                      key={sale.id}
-                      className="flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 border border-amber-100"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-slate-800">
-                          Venta #{String(sale.id).slice(0, 8)}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Estado: {sale.status}
+                  {selectedClientDebtSales.map((sale) => {
+                    const netDebt = Math.max((Number(sale.total) || 0) - (Number(sale.credit_applied) || 0), 0)
+
+                    return (
+                      <div
+                        key={sale.id}
+                        className="flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 border border-amber-100"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">
+                            Venta #{String(sale.id).slice(0, 8)}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Estado: {sale.status}
+                          </p>
+                        </div>
+                        <p className="text-sm font-semibold text-amber-900">
+                          {formatCurrency(netDebt)}
                         </p>
                       </div>
-                      <p className="text-sm font-semibold text-amber-900">
-                        {formatCurrency(sale.total)}
-                      </p>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
 
                 <div className="flex items-center justify-between border-t border-amber-200 pt-3">
@@ -273,6 +300,33 @@ export default function NewSale() {
                   <span className="text-base font-bold text-amber-900">
                     {formatCurrency(totalDebt)}
                   </span>
+                </div>
+              </div>
+            )}
+
+            {clientId && creditBalance > 0 && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-emerald-900">
+                    Este cliente tiene saldo a favor
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-lg bg-white/70 border border-emerald-100 p-3">
+                    <p className="text-slate-500">Saldo a favor actual</p>
+                    <p className="font-semibold text-emerald-900">{formatCurrency(creditBalance)}</p>
+                  </div>
+
+                  <div className="rounded-lg bg-white/70 border border-emerald-100 p-3">
+                    <p className="text-slate-500">Se aplicará en esta venta</p>
+                    <p className="font-semibold text-emerald-900">{formatCurrency(creditToApply)}</p>
+                  </div>
+
+                  <div className="rounded-lg bg-white/70 border border-emerald-100 p-3">
+                    <p className="text-slate-500">Saldo pendiente luego del crédito</p>
+                    <p className="font-semibold text-emerald-900">{formatCurrency(remainingAfterCredit)}</p>
+                  </div>
                 </div>
               </div>
             )}
@@ -293,10 +347,24 @@ export default function NewSale() {
               </div>
 
               <div className="space-y-2">
-                <Label>Total</Label>
+                <Label>Total bruto</Label>
                 <Input value={formatCurrency(total)} disabled />
               </div>
             </div>
+
+            {creditToApply > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Crédito aplicado</Label>
+                  <Input value={formatCurrency(creditToApply)} disabled />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Total pendiente</Label>
+                  <Input value={formatCurrency(remainingAfterCredit)} disabled />
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="notes">Notas</Label>
@@ -338,6 +406,7 @@ export default function NewSale() {
                       <option value="">Seleccionar producto</option>
                       {products.map((product) => (
                         <option key={product.id} value={product.id}>
+                          {product.legacy_id ? `${product.legacy_id} - ` : ""}
                           {product.name} {product.stock !== undefined ? `(stock: ${product.stock})` : ""}
                         </option>
                       ))}
