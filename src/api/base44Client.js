@@ -197,12 +197,59 @@ const saleEntity = {
   },
 
   async delete(id) {
+    const sale = await this.get(id)
+
+    for (const item of sale.items || []) {
+      const { data: product, error: productError } = await supabase
+        .from("products")
+        .select("*")
+        .eq("id", item.product_id)
+        .single()
+
+      if (productError) throw productError
+
+      const currentStock = Number(product.stock) || 0
+      const quantity = Number(item.quantity) || 0
+
+      const { error: updateStockError } = await supabase
+        .from("products")
+        .update({
+          stock: currentStock + quantity,
+        })
+        .eq("id", item.product_id)
+
+      if (updateStockError) throw updateStockError
+    }
+
+    if ((Number(sale.credit_applied) || 0) > 0) {
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("id", sale.client_id)
+        .single()
+
+      if (clientError) throw clientError
+
+      const currentCredit = Number(client.credit_balance) || 0
+      const creditToRestore = Number(sale.credit_applied) || 0
+
+      const { error: updateClientError } = await supabase
+        .from("clients")
+        .update({
+          credit_balance: currentCredit + creditToRestore,
+        })
+        .eq("id", sale.client_id)
+
+      if (updateClientError) throw updateClientError
+    }
+
     const { error } = await supabase
       .from("sales")
       .delete()
       .eq("id", id)
 
     if (error) throw error
+
     return true
   },
 }
