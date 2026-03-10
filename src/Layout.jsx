@@ -58,7 +58,7 @@ export default function Layout({ children, currentPageName }) {
                 <Package className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h1 className="font-bold text-slate-900 text-lg tracking-tight">StockPro</h1>
+                <h1 className="font-bold text-slate-900 text-lg tracking-tight">AgroApp</h1>
                 <p className="text-xs text-slate-400">Gestión de inventario</p>
               </div>
             </div>
@@ -126,7 +126,7 @@ export default function Layout({ children, currentPageName }) {
               <div className="h-7 w-7 rounded-lg bg-indigo-600 flex items-center justify-center">
                 <Package className="h-4 w-4 text-white" />
               </div>
-              <span className="font-bold text-slate-900">StockPro</span>
+              <span className="font-bold text-slate-900">AgroApp</span>
             </div>
             <div className="w-10" />
           </div>

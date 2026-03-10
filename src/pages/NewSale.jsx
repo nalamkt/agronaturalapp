@@ -1,212 +1,417 @@
-import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
-import { ArrowLeft, Plus, ShoppingCart } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import SaleItemRow from "@/components/sales/SaleItemRow";
-import { toast } from "sonner";
+import React, { useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
+import { base44 } from "@/api/base44Client"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.jsx"
+import { Button } from "@/components/ui/button.jsx"
+import { Input } from "@/components/ui/input.jsx"
+import { Label } from "@/components/ui/label.jsx"
+import { Textarea } from "@/components/ui/textarea.jsx"
+import { Skeleton } from "@/components/ui/skeleton.jsx"
+import { Plus, Trash2 } from "lucide-react"
 
-const emptyItem = { product_id: "", product_name: "", quantity: 1, unit_price: 0, subtotal: 0 };
+const emptyItem = {
+  product_id: "",
+  product_name: "",
+  quantity: 1,
+  unit_price: 0,
+  subtotal: 0,
+}
 
 export default function NewSale() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const preselectedClientId = urlParams.get("client_id") || "";
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
-  const [clientId, setClientId] = useState(preselectedClientId);
-  const [items, setItems] = useState([{ ...emptyItem }]);
-  const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState("pendiente");
-  const [saving, setSaving] = useState(false);
+  const [clientId, setClientId] = useState("")
+  const [status, setStatus] = useState("pendiente")
+  const [notes, setNotes] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [items, setItems] = useState([{ ...emptyItem }])
 
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  const { data: clients = [] } = useQuery({
+  const { data: clients = [], isLoading: loadingClients } = useQuery({
     queryKey: ["clients"],
     queryFn: () => base44.entities.Client.list(),
-  });
+  })
 
-  const { data: products = [] } = useQuery({
+  const { data: products = [], isLoading: loadingProducts } = useQuery({
     queryKey: ["products"],
     queryFn: () => base44.entities.Product.list(),
-  });
+  })
 
-  const handleItemChange = (index, updatedItem) => {
-    const newItems = [...items];
-    newItems[index] = updatedItem;
-    setItems(newItems);
-  };
+  const { data: sales = [], isLoading: loadingSales } = useQuery({
+    queryKey: ["sales"],
+    queryFn: () => base44.entities.Sale.list(),
+  })
 
-  const handleRemoveItem = (index) => {
-    if (items.length === 1) return;
-    setItems(items.filter((_, i) => i !== index));
-  };
+  const selectedClient = useMemo(
+    () => clients.find((c) => c.id === clientId),
+    [clients, clientId]
+  )
+
+  const selectedClientDebtSales = useMemo(() => {
+    if (!clientId) return []
+
+    return sales.filter((sale) => {
+      if (sale.client_id !== clientId) return false
+      return sale.status === "pendiente" || sale.status === "cuenta_corriente"
+    })
+  }, [sales, clientId])
+
+  const totalDebt = useMemo(() => {
+    return selectedClientDebtSales.reduce((acc, sale) => {
+      return acc + (Number(sale.total) || 0)
+    }, 0)
+  }, [selectedClientDebtSales])
+
+  const total = useMemo(() => {
+    return items.reduce((acc, item) => acc + (Number(item.subtotal) || 0), 0)
+  }, [items])
+
+  const formatCurrency = (value) =>
+    new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      minimumFractionDigits: 2,
+    }).format(Number(value) || 0)
 
   const addItem = () => {
-    setItems([...items, { ...emptyItem }]);
-  };
-
-  const total = items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
-
-  const handleSubmit = async () => {
-  if (!clientId) {
-    toast.error("Seleccioná un cliente")
-    return
+    setItems((prev) => [...prev, { ...emptyItem }])
   }
 
-  const validItems = items.filter((i) => i.product_id)
-  if (validItems.length === 0) {
-    toast.error("Agregá al menos un producto")
-    return
+  const removeItem = (index) => {
+    setItems((prev) => prev.filter((_, i) => i !== index))
   }
 
-  try {
-    setSaving(true)
-    const client = clients.find((c) => c.id === clientId)
+  const updateItem = (index, patch) => {
+    setItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item
 
-    await base44.entities.Sale.create({
-      client_id: clientId,
-      client_name: client?.name || "",
-      items: validItems,
-      total,
-      status,
-      notes,
-      sale_date: new Date().toISOString().split("T")[0],
+        const updated = { ...item, ...patch }
+        const quantity = Number(updated.quantity) || 0
+        const unitPrice = Number(updated.unit_price) || 0
+
+        return {
+          ...updated,
+          subtotal: quantity * unitPrice,
+        }
+      })
+    )
+  }
+
+  const handleProductChange = (index, productId) => {
+    const product = products.find((p) => p.id === productId)
+
+    if (!product) {
+      updateItem(index, {
+        product_id: "",
+        product_name: "",
+        unit_price: 0,
+        subtotal: 0,
+      })
+      return
+    }
+
+    const currentQty = Number(items[index]?.quantity) || 1
+
+    updateItem(index, {
+      product_id: product.id,
+      product_name: product.name,
+      unit_price: Number(product.price) || 0,
+      quantity: currentQty,
+      subtotal: currentQty * (Number(product.price) || 0),
     })
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+
+    if (!clientId) {
+      toast.error("Seleccioná un cliente")
+      return
+    }
+
+    const validItems = items.filter((i) => i.product_id && Number(i.quantity) > 0)
+
+    if (validItems.length === 0) {
+      toast.error("Agregá al menos un producto")
+      return
+    }
 
     for (const item of validItems) {
       const product = products.find((p) => p.id === item.product_id)
-      if (product) {
-        await base44.entities.Product.update(product.id, {
-          stock: Math.max(0, product.stock - item.quantity),
-        })
+
+      if (!product) {
+        toast.error("Hay productos inválidos en la venta")
+        return
+      }
+
+      if ((Number(product.stock) || 0) < Number(item.quantity)) {
+        toast.error(`Stock insuficiente para ${product.name}`)
+        return
       }
     }
 
-    queryClient.invalidateQueries({ queryKey: ["sales"] })
-    queryClient.invalidateQueries({ queryKey: ["products"] })
+    try {
+      setSaving(true)
 
-    toast.success("Venta creada exitosamente")
-    navigate("/newsale" === window.location.pathname ? "/sales" : "/sales")
-  } catch (error) {
-    console.error(error)
-    toast.error("No se pudo crear la venta")
-  } finally {
-    setSaving(false)
+      await base44.entities.Sale.create({
+        client_id: clientId,
+        client_name: selectedClient?.name || "",
+        items: validItems.map((item) => ({
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity: Number(item.quantity) || 0,
+          unit_price: Number(item.unit_price) || 0,
+          subtotal: Number(item.subtotal) || 0,
+        })),
+        total,
+        status,
+        notes,
+        sale_date: new Date().toISOString().split("T")[0],
+      })
+
+      for (const item of validItems) {
+        const product = products.find((p) => p.id === item.product_id)
+
+        if (product) {
+          await base44.entities.Product.update(product.id, {
+            stock: Math.max(0, (Number(product.stock) || 0) - (Number(item.quantity) || 0)),
+          })
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["sales"] })
+      queryClient.invalidateQueries({ queryKey: ["products"] })
+
+      toast.success("Venta creada exitosamente")
+      navigate("/sales")
+    } catch (error) {
+      console.error(error)
+      toast.error("No se pudo crear la venta")
+    } finally {
+      setSaving(false)
+    }
   }
-}
+
+  if (loadingClients || loadingProducts || loadingSales) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-56" />
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-72 w-full" />
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center gap-4">
-        <Link to={createPageUrl("Sales")}>
-          <Button variant="ghost" size="icon" className="h-9 w-9">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Nueva venta</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Completá los datos de la venta</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Nueva venta</h1>
+        <p className="text-sm text-slate-500 mt-1">Registrá una venta y descontá stock automáticamente</p>
       </div>
 
-      {/* Cliente */}
-      <Card className="p-5 border-slate-200/60 space-y-4">
-        <Label className="text-base font-semibold text-slate-900">Cliente</Label>
-        <Select value={clientId} onValueChange={setClientId}>
-          <SelectTrigger className="bg-white">
-            <SelectValue placeholder="Seleccionar cliente" />
-          </SelectTrigger>
-          <SelectContent>
-            {clients.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Card>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card className="border-slate-200/60">
+          <CardHeader>
+            <CardTitle>Datos de la venta</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="client">Cliente</Label>
+              <select
+                id="client"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-slate-200 bg-background px-3 py-2 text-sm"
+                required
+              >
+                <option value="">Seleccionar cliente</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-      {/* Productos */}
-      <Card className="p-5 border-slate-200/60 space-y-4">
-        <div className="flex items-center justify-between">
-          <Label className="text-base font-semibold text-slate-900">Productos</Label>
-          <Button type="button" variant="outline" size="sm" onClick={addItem}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> Agregar producto
+            {clientId && selectedClientDebtSales.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-amber-900">
+                    Este cliente tiene deuda
+                  </p>
+                  <p className="text-sm text-amber-800">
+                    {selectedClientDebtSales.length} venta{selectedClientDebtSales.length > 1 ? "s" : ""} pendiente{selectedClientDebtSales.length > 1 ? "s" : ""}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {selectedClientDebtSales.map((sale) => (
+                    <div
+                      key={sale.id}
+                      className="flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 border border-amber-100"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">
+                          Venta #{String(sale.id).slice(0, 8)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Estado: {sale.status}
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold text-amber-900">
+                        {formatCurrency(sale.total)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between border-t border-amber-200 pt-3">
+                  <span className="text-sm font-semibold text-slate-800">Deuda total</span>
+                  <span className="text-base font-bold text-amber-900">
+                    {formatCurrency(totalDebt)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="status">Estado</Label>
+                <select
+                  id="status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-background px-3 py-2 text-sm"
+                >
+                  <option value="pendiente">Pendiente</option>
+                  <option value="cobrada">Cobrada</option>
+                  <option value="cuenta_corriente">Cuenta corriente</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Total</Label>
+                <Input value={formatCurrency(total)} disabled />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notas</Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Observaciones de la venta"
+                rows={3}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200/60">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Productos</CardTitle>
+            <Button type="button" onClick={addItem} variant="outline">
+              <Plus className="h-4 w-4 mr-2" />
+              Agregar producto
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {items.map((item, index) => {
+              const selectedProduct = products.find((p) => p.id === item.product_id)
+
+              return (
+                <div
+                  key={index}
+                  className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end rounded-xl border border-slate-200 p-4"
+                >
+                  <div className="md:col-span-5 space-y-2">
+                    <Label>Producto</Label>
+                    <select
+                      value={item.product_id}
+                      onChange={(e) => handleProductChange(index, e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-slate-200 bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Seleccionar producto</option>
+                      {products.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.name} {product.stock !== undefined ? `(stock: ${product.stock})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2 space-y-2">
+                    <Label>Cantidad</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(e) =>
+                        updateItem(index, {
+                          quantity: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 space-y-2">
+                    <Label>Precio</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={item.unit_price}
+                      onChange={(e) =>
+                        updateItem(index, {
+                          unit_price: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 space-y-2">
+                    <Label>Subtotal</Label>
+                    <Input value={formatCurrency(item.subtotal)} disabled />
+                  </div>
+
+                  <div className="md:col-span-1 flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItem(index)}
+                      disabled={items.length === 1}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+
+                  {selectedProduct && (
+                    <div className="md:col-span-12">
+                      <p className="text-xs text-slate-500">
+                        Stock disponible: {selectedProduct.stock ?? 0}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+
+        <div className="flex items-center justify-end gap-3">
+          <Button type="button" variant="outline" onClick={() => navigate("/sales")}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
+            {saving ? "Creando venta..." : "Crear venta"}
           </Button>
         </div>
-
-        <div className="space-y-3">
-          {items.map((item, index) => (
-            <SaleItemRow
-              key={index}
-              item={item}
-              index={index}
-              products={products}
-              onChange={handleItemChange}
-              onRemove={handleRemoveItem}
-            />
-          ))}
-        </div>
-
-        <div className="flex justify-end pt-4 border-t border-slate-100">
-          <div className="text-right">
-            <p className="text-sm text-slate-400">Total de la venta</p>
-            <p className="text-3xl font-bold text-slate-900">
-              ${total.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      {/* Estado y notas */}
-      <Card className="p-5 border-slate-200/60 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Estado de la venta</Label>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pendiente">Pendiente</SelectItem>
-                <SelectItem value="cobrada">Cobrada</SelectItem>
-                <SelectItem value="cuenta_corriente">Cuenta Corriente</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Notas (opcional)</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notas adicionales..."
-              rows={1}
-            />
-          </div>
-        </div>
-      </Card>
-
-      {/* Botón guardar */}
-      <div className="flex justify-end gap-3">
-        <Link to={createPageUrl("Sales")}>
-          <Button variant="outline">Cancelar</Button>
-        </Link>
-        <Button
-          onClick={handleSubmit}
-          disabled={saving}
-          className="bg-indigo-600 hover:bg-indigo-700"
-        >
-          <ShoppingCart className="h-4 w-4 mr-2" />
-          {saving ? "Creando venta..." : "Crear venta"}
-        </Button>
-      </div>
+      </form>
     </div>
-  );
+  )
 }

@@ -78,8 +78,7 @@ export default function ResetPassword() {
       setMessage("Contraseña actualizada correctamente. Redirigiendo...")
 
       setTimeout(() => {
-        navigate("/")
-      }, 1200)
+        navigate("/login")      }, 1200)
     } catch (error) {
       console.error("Error actualizando contraseña:", error)
       setErrorMessage(error?.message || "No se pudo actualizar la contraseña.")

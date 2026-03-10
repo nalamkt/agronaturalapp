@@ -30,7 +30,7 @@ export default function Dashboard() {
   const isLoading = loadingProducts || loadingSales || loadingClients;
 
   const totalStock = products.reduce((sum, p) => sum + (p.stock || 0), 0);
-  const lowStockProducts = products.filter((p) => p.stock <= 5 && p.active !== false);
+  const lowAgroAppducts = products.filter((p) => p.stock <= 5 && p.active !== false);
   const pendingSales = sales.filter((s) => s.status === "pendiente" || s.status === "cuenta_corriente");
   const totalDebt = pendingSales.reduce((sum, s) => sum + (s.total || 0), 0);
   const recentSales = sales.slice(0, 5);
@@ -131,10 +131,10 @@ export default function Dashboard() {
             </Link>
           </div>
           <div className="divide-y divide-slate-50">
-            {lowStockProducts.length === 0 ? (
+            {lowAgroAppducts.length === 0 ? (
               <p className="p-5 text-sm text-slate-400 text-center">Todo el stock está bien</p>
             ) : (
-              lowStockProducts.slice(0, 5).map((product) => (
+              lowAgroAppducts.slice(0, 5).map((product) => (
                 <div key={product.id} className="px-5 py-3 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-slate-900">{product.name}</p>
